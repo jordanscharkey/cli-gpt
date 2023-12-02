@@ -6,7 +6,7 @@ import time
 from openai import OpenAI
 
 from help import HelpCommands, start_chat
-from style import StyleLog as styler
+from style import StyleLog
 
 # Read in token from "token" file
 # TODO: env variable in future?
@@ -37,6 +37,7 @@ def main():
         model = "gpt-3.5-turbo"
 
     helper = HelpCommands(model)
+    styler = StyleLog()
     messages = start_chat(model)
 
     while True:
@@ -59,7 +60,7 @@ def main():
             response_thread = threading.Thread(target=text_call, args=(api_call_queue, messages, model,))
         response_thread.start()
 
-        ellipsis_thread = threading.Thread(target=show_ellipsis)
+        ellipsis_thread = threading.Thread(target=styler.show_ellipsis, args=(api_call_done,))
         ellipsis_thread.start()
 
         response_thread.join()

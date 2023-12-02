@@ -1,4 +1,5 @@
 import sys
+import time
 
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
@@ -6,9 +7,9 @@ from prompt_toolkit.styles import Style
 class StyleLog:
 
     def prompt(role: str):
+        return
         
-    
-    def show_ellipsis():
+    def show_ellipsis(self, api_call_done):
         loop = True
         while loop:
             for i in range(0, 4):
