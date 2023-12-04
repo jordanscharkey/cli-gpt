@@ -105,7 +105,7 @@ class HelpCommands:
 
             if "/clear" in user_input_lower:
                 styler.prompt("system", "Clearing messages and restarting log.\n\n")
-                messages = start_chat(model)
+                messages = start_chat(model, styler)
                 return 2, messages, model
 
             if "/info" in user_input_lower:
