@@ -1,8 +1,10 @@
 import queue
 import sys
+import os
 import threading
 import time
 
+import curses
 from openai import OpenAI
 
 from help import HelpCommands, start_chat
@@ -38,13 +40,13 @@ def main():
 
     helper = HelpCommands(model)
     styler = StyleLog()
-    messages = start_chat(model)
+    messages = start_chat(model, styler)
 
     while True:
-        # TODO: Format output nicer :)
-        user_input = input("\nInput: ")
 
-        status, messages, model = helper.command(user_input, messages, model)
+        user_input = styler.prompt("user", "")
+
+        status, messages, model = helper.command(user_input, messages, model, styler)
         if status == 1:
             break
         elif status == 2:
@@ -69,7 +71,7 @@ def main():
 
         ai_response = api_call_queue.get()
         messages.append({"role": "assistant", "content": ai_response})
-        print(f"\nAI: {ai_response}\n")
+        styler.prompt("assistant", f"{ai_response}\n")
 
         # TODO: Add some form of token check, as to not overflow
 

@@ -1,6 +1,7 @@
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import tiktoken
@@ -8,9 +9,11 @@ import tiktoken
 # TODO: I don't love the way this file is structured from an extensibility perspective.
 # Find a way to maybe like the 'options' dict with the command list?
 
-def start_chat(model: str):
-    print("System: Welcome to cli-gpt. You may type your questions, or seek additional functionality via '/help'.")
-    print(f"System: Currently using model '{model}'.")
+def start_chat(model: str, styler):
+    sys.stdout.write('\033[2J\033[H')
+    styler.prompt("none", "")
+    styler.prompt("system", "Welcome to cli-gpt. You may type your questions, or seek additional functionality via '/help'.")
+    styler.prompt("system", f"Currently using model '{model}'.")
     return [{"role": "system", "content": "You are a helpful assistant."}]
 
 def get_token_count(messages: list, model: str):
@@ -65,70 +68,70 @@ class HelpCommands:
             raise TypeError(f"System: Model '{model}' is not available. Please start again and re-specify model version, or leave blank.")
 
 
-    def command(self, user_input: str, messages: list, model: str) -> (int, list, str):
+    def command(self, user_input: str, messages: list, model: str, styler) -> (int, list, str):
         if user_input.lower() in list(self.options.keys()):
             user_input_lower = user_input.lower()
 
-            if user_input_lower == "/exit":
+            if "/exit" in user_input_lower:
                 return 1, [None], ""
 
-            if user_input_lower == "/context":
-                print("\nSystem: Please provide the URL you would like to curl.")
+            if "/context" in user_input_lower:
+                styler.prompt("system", "Please provide the URL you would like to curl.")
                 url = input("URL: ")
                 curl_output = subprocess.check_output(f"curl {url}", shell=True).decode('utf-8').strip()
                 return [None, f"I would like to provide the following context from a curl command to '{url} to this chat: {curl_output}"]
 
-            if user_input_lower == "/help":
-                print(f"\nSystem: Below is a list of available commands.\n")
+            if "/help" in user_input_lower:
+                styler.prompt("system", "Below is a list of available commands.")
                 for key in list(self.options.keys()):
-                    print(f" - {key}: {self.options[key]}")
+                    styler.prompt("none", f" - {key}: {self.options[key]}")
                 return 2, messages, model
 
-            if user_input_lower == "/load":
-                print("\nSystem: Please specify the filepath you would like to load in from, or '/cancel'.")
+            if "/load" in user_input_lower:
+                styler.prompt("system", "Please specify the filepath you would like to load in from, or '/cancel'.")
                 path = input("Path: ")
                 if path != "/cancel":
                     with open(Path(path), "r") as file:
                         messages = json.load(file)
-                    print(f"System: Successfully read in from {path}. Continuing chat.")
+                    styler.prompt("system", f"Successfully read in from {path}. Continuing chat.")
                 return 2, messages, model
 
-            if user_input_lower == "/save":
+            if "/save" in user_input_lower:
                 status, destination = self._save(messages)
                 if status == 1:
                     return 2, messages, model
-                print(f"System: Successfully saved to {destination}. Closing chat.")
+                styler.prompt("system", "Successfully saved to {destination}. Closing chat.")
                 return 1, [None], ""
 
-            if user_input_lower == "/clear":
-                print(f"\nSystem: Clearing messages and restarting log.\n\n")
+            if "/clear" in user_input_lower:
+                styler.prompt("system", "Clearing messages and restarting log.\n\n")
                 messages = start_chat(model)
                 return 2, messages, model
 
-            if user_input_lower == "/info":
-                print(f"\nSystem: This chatlog has used {get_token_count(messages, model)} token for model version '{model}'.")
-                print("System: Currently using cli-gpt version 0.0.1.")
+            if "/info" in user_input_lower:
+                styler.prompt("system", f"This chatlog has used {get_token_count(messages, model)} token for model version '{model}'.")
+                styler.prompt("system", "Currently using cli-gpt version 0.0.1.")
                 return 2, messages, model
 
-            if user_input_lower == "/model":
-                print("\nSystem: Below is a list of available models. View up-to-date model information in the OpenAI API documentation.")
-                print("\n - Text Models")
+            if "/model" in user_input_lower:
+                styler.prompt("system", "Below is a list of available models. View up-to-date model information in the OpenAI API documentation.")
+                styler.prompt("none", "\n - Text Models")
                 for list_model in self.text_models:
-                    print(f"   - {list_model}")
-                print("\n - Image Models")
+                    styler.prompt("none", f"   - {list_model}")
+                styler.prompt("none", "\n - Image Models")
                 for list_model in self.image_models:
-                    print(f"   - {list_model}")
-                print("\nSystem: Change model version below, use '/list' to reprint available models, or '/cancel' to return to chat.")
+                    styler.prompt("none", f"   - {list_model}")
+                styler.prompt("system", "Change model version below, use '/list' to reprint available models, or '/cancel' to return to chat.")
                 new_model = input("\nModel: ")
                 while new_model not in self.text_models and new_model not in self.image_models:
                     if new_model == "/list": 
-                        print("\nSystem: Below is a list of available models. View up-to-date model information in the OpenAI API documentation.")
-                        print("\n - Text Models")
+                        styler.prompt("system", "Below is a list of available models. View up-to-date model information in the OpenAI API documentation.")
+                        styler.prompt("none", "\n - Text Models")
                         for list_model in self.text_models:
-                            print(f"   - {list_model}")
-                        print("\n - Image Models")
+                            styler.prompt("none", f"   - {list_model}")
+                        styler.prompt("none", "\n - Image Models")
                         for list_model in self.image_models:
-                            print(f"   - {list_model}")
+                            styler.prompt("none", f"   - {list_model}")
                     elif new_model == "/cancel":
                         return 2, messages, model
                     else:
@@ -137,13 +140,13 @@ class HelpCommands:
 
                 # "image" models and "text" models behave different, handle switching
                 if (self.model_type == "text" and new_model in self.image_models) or (self.model_type == "image" and new_model in self.text_models):
-                    print("\nSystem: Switching between 'text' and 'image' models requires clearing the current message log. Would you like to save before switching models?")
+                    styler.prompt("system", "Switching between 'text' and 'image' models requires clearing the current message log. Would you like to save before switching models?")
                     user_save = input("Save? (y,N): ")
                     if user_save.lower() == "y":
                         self._save(messages)
                 return 2, messages, new_model
 
-            if user_input_lower == "/write":
+            if "/write" in user_input_lower:
                 pattern = r'```(.*?)```'
                 code_blocks = re.findall(pattern, messages[-1]['content'], re.DOTALL)
                 print(f"\nSystem: Found {len(code_blocks)} code examples.")
