@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -27,13 +28,14 @@ class HelpCommands:
     
     options: dict = {
         "/exit": "Closes the chat.",
-        "/context": "Passthrough a URL to curl the context of into the chat history.",
+        "/context": "Passthrough a URL to curl the context of into the chat history.", #TODO
         "/help": "Display this list of available commands.",
         "/load": "Load in a previous chat's JSON file.",
         "/save": "Saves messages to specified JSON file and closes chat.",
         "/clear": "Clears all messages and tokens from the chatlog, restarting the chat.",
         "/model": "Change the model being used.",
         "/info": "Print model information and cli-gpt version.",
+        "/write": "Write out any code from the previous message to a specified file.", #TODO
     }
 
     text_models = [
@@ -84,11 +86,11 @@ class HelpCommands:
 
             if user_input_lower == "/load":
                 print("\nSystem: Please specify the filepath you would like to load in from, or '/cancel'.")
-                url = input("Path: ")
-                if url != "/cancel":
-                    with open(Path(url), "r") as file:
+                path = input("Path: ")
+                if path != "/cancel":
+                    with open(Path(path), "r") as file:
                         messages = json.load(file)
-                    print(f"System: Successfully read in from {url}. Continuing chat.")
+                    print(f"System: Successfully read in from {path}. Continuing chat.")
                 return 2, messages, model
 
             if user_input_lower == "/save":
@@ -140,6 +142,23 @@ class HelpCommands:
                     if user_save.lower() == "y":
                         self._save(messages)
                 return 2, messages, new_model
+
+            if user_input_lower == "/write":
+                pattern = r'```(.*?)```'
+                code_blocks = re.findall(pattern, messages[-1]['content'], re.DOTALL)
+                print(f"\nSystem: Found {len(code_blocks)} code examples.")
+                for block in code_blocks:
+                    block = re.sub(r'^.*\n', '', block)
+                    print(f"\n{block}")
+                    print("\nSystem: Please specify the filepath you would like to load in from, or '/cancel'.")
+                    path = input("Path: ")
+                    if path == "/cancel":
+                        return 2, messages, model
+                    with open(Path(path), "w+") as file:
+                        messages = file.write(block)
+                print(f"System: Successfully saved code snippets. Continuing chat.")
+                return 2, messages, model
+
 
         messages.append({"role": "user", "content": user_input})
         return 0, messages, model
