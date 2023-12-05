@@ -12,7 +12,7 @@ from style import StyleLog
 
 # Read in token from "token" file
 # TODO: env variable in future?
-with open("token", "r") as file:
+with open("key", "r") as file:
     token = file.readlines()
 client = OpenAI(api_key=token[0].strip())
 
