@@ -38,7 +38,8 @@ class HelpCommands:
         "/clear": "Clears all messages and tokens from the chatlog, restarting the chat.",
         "/model": "Change the model being used.",
         "/info": "Print model information and cli-gpt version.",
-        "/write": "Write out any code from the previous message to a specified file.", #TODO
+        "/write": "Write out any code from the previous message to a specified file.",
+        "/copy": "Copy code snippets from the previous message into the copy buffer.",
     }
 
     text_models = [
@@ -100,7 +101,7 @@ class HelpCommands:
                 status, destination = self._save(messages)
                 if status == 1:
                     return 2, messages, model
-                styler.prompt("system", "Successfully saved to {destination}. Closing chat.")
+                styler.prompt("system", f"Successfully saved to {destination}. Closing chat.")
                 return 1, [None], ""
 
             if "/clear" in user_input_lower:
@@ -158,7 +159,7 @@ class HelpCommands:
                     if path == "/cancel":
                         return 2, messages, model
                     with open(Path(path), "w+") as file:
-                        messages = file.write(block)
+                        file.write(block)
                 print(f"System: Successfully saved code snippets. Continuing chat.")
                 return 2, messages, model
 
