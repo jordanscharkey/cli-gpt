@@ -5,16 +5,15 @@ import sys
 from pathlib import Path
 
 import tiktoken
-
-# TODO: I don't love the way this file is structured from an extensibility perspective.
-# Find a way to maybe like the 'options' dict with the command list?
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
 
 def start_chat(model: str, styler):
     sys.stdout.write('\033[2J\033[H')
     styler.prompt("none", "")
     styler.prompt("system", "Welcome to cli-gpt. You may type your questions, or seek additional functionality via '/help'.")
     styler.prompt("system", f"Currently using model '{model}'.")
-    return [{"role": "system", "content": "You are a helpful assistant."}]
+    return [{"role": "system", "content": "You are a helpful assistant. Do not repeat the contents of a file or URL if passed through for context."}]
 
 def get_token_count(messages: list, model: str):
     total_tokens: int = 0
@@ -31,7 +30,7 @@ class HelpCommands:
     
     options: dict = {
         "/exit": "Closes the chat.",
-        "/context": "Passthrough a URL to curl the context of into the chat history.", #TODO
+        "/context": "Passthrough a URL or filepath to add context into the chat history.",
         "/help": "Display this list of available commands.",
         "/load": "Load in a previous chat's JSON file.",
         "/save": "Saves messages to specified JSON file and closes chat.",
@@ -39,7 +38,7 @@ class HelpCommands:
         "/model": "Change the model being used.",
         "/info": "Print model information and cli-gpt version.",
         "/write": "Write out any code from the previous message to a specified file.",
-        "/copy": "Copy code snippets from the previous message into the copy buffer.",
+        "/copy": "Copy code snippets from the previous message into the copy buffer.", #TODO
     }
 
     text_models = [
@@ -54,8 +53,8 @@ class HelpCommands:
     ]
 
     image_models = [
-        "dall-e-2",
-        "dall-e-3",
+        "dall-e-2", #TODO
+        "dall-e-3", #TODO
     ]
 
     model_type = None
@@ -77,10 +76,47 @@ class HelpCommands:
                 return 1, [None], ""
 
             if "/context" in user_input_lower:
-                styler.prompt("system", "Please provide the URL you would like to curl.")
-                url = input("URL: ")
-                curl_output = subprocess.check_output(f"curl {url}", shell=True).decode('utf-8').strip()
-                return [None, f"I would like to provide the following context from a curl command to '{url} to this chat: {curl_output}"]
+                styler.prompt("system", "Would you like to provide a 'URL' or 'file' path? (or '/cancel')")
+                context_input = styler.prompt("user", "")
+                if "/cancel" in context_input:
+                    return 2, messages, model
+                elif "url" in context_input.lower():
+                    styler.prompt("system", "CAUTION: Loading certain websites requires a large amount of tokens. You may require a different model to not hit the max token amount.")
+                    styler.prompt("system", "Be mindful of API token usage cost when importing websites. You may check your usage amount at https://platform.openai.com/usage\n")
+                    styler.prompt("system", "Please specify a full URL you woulkd like to read from. (or '/cancel')")
+                    while True:
+                        url_input = styler.prompt("user", "")
+                        if "/cancel" in url_input:
+                            return 2, messages, model
+                        else:
+                            try:
+                                options = Options()
+                                options.headless = True
+                                options.binary_location = "/usr/bin/firefox"
+                                driver = webdriver.Firefox(options=options)
+                                driver.get(url_input)
+                                rendered_html = driver.page_source
+                                messages.append({"role": "user", "content": f"For context I would like to add the contents of file {url_input} to this chat: {rendered_html}"})
+                                driver.quit()
+                                return 0, messages, model
+                            except Exception as e:
+                                styler.prompt("system", f"ERROR: {e}")
+                                styler.prompt("system", "Error: URL could not be accessed. Please try again.")
+                elif "file" in context_input.lower():
+                    styler.prompt("system", "Please specify the filepath you woulkd like to read from. (or '/cancel')")
+                    while True:
+                        filepath_input = styler.prompt("user", "")
+                        if "/cancel" in filepath_input:
+                            return 2, messages, model
+                        else:
+                            try:
+                                with open(Path(filepath_input), "r") as file:
+                                    file_contents = file.readlines()
+                                messages.append({"role": "user", "content": f"For context I would like to add the contents of file {filepath_input} to this chat: {file_contents}"})
+                                return 0, messages, model
+                            except Exception as e:
+                                styler.prompt("system", f"ERROR: {e}")
+                                styler.prompt("system", "Error: Filepath could not be accessed. Please try again.")
 
             if "/help" in user_input_lower:
                 styler.prompt("system", "Below is a list of available commands.")
@@ -154,12 +190,15 @@ class HelpCommands:
                 for block in code_blocks:
                     block = re.sub(r'^.*\n', '', block)
                     print(f"\n{block}")
-                    print("\nSystem: Please specify the filepath you would like to load in from, or '/cancel'.")
+                    print("\nSystem: Please specify the filepath you would like to load in from, '/skip' to go to the next snippet, or '/cancel'.")
                     path = input("Path: ")
                     if path == "/cancel":
                         return 2, messages, model
-                    with open(Path(path), "w+") as file:
-                        file.write(block)
+                    elif path == "/skip":
+                        continue
+                    else:
+                        with open(Path(path), "w+") as file:
+                            file.write(block)
                 print(f"System: Successfully saved code snippets. Continuing chat.")
                 return 2, messages, model
 
